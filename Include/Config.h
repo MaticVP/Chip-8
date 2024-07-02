@@ -1,0 +1,14 @@
+//
+// Created by matic on 30/06/2024.
+//
+
+#ifndef CHIP_8_EMULATOR_CONFIG_H
+#define CHIP_8_EMULATOR_CONFIG_H
+
+#define STACK_SIZE 12
+#define MEMORY_SIZE 4096
+
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 640
+
+#endif //CHIP_8_EMULATOR_CONFIG_H
