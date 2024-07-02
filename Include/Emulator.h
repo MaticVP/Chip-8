@@ -13,6 +13,7 @@
 #include <cstring>
 #include <SDL.h>
 #include <chrono>
+#include <windows.h>
 
 struct SDL_app {
     SDL_Renderer *renderer;
@@ -35,6 +36,7 @@ public:
     void execute_instruction();
     void initSDL();
     void draw();
+    void playSound();
     void subSwitch8(unsigned char second_nibble,unsigned char third_nibble
                     ,unsigned char forth_nibble);
     void subSwitch15(unsigned char second_nibble, unsigned short second_byte);

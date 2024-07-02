@@ -15,6 +15,148 @@ void Emulator::load_rom(const char path[]) {
     }
 }
 
+void Emulator::subSwitch15(unsigned char second_nibble, unsigned short second_byte) {
+    switch (second_byte) {
+        case 0x07:{
+            this->cpu.registers[second_nibble] = this->delay_timer;
+            break;
+        }
+        case 0x0A:{
+            unsigned short key_state = this->keyboard & 0xFFFF;
+            if(!key_state) {
+                this->cpu.PC -= 2;
+            }
+            else{
+                for (int i = 0; i < 16; ++i) {
+                    if(this->keyboard & 1 << i){
+                        this->cpu.registers[second_nibble] = i;
+                        break;
+                    }
+                }
+            }
+            this->keyboard = 0;
+            break;
+        }
+        case 0x15:{
+            this->delay_timer = this->cpu.registers[second_nibble];
+            break;
+        }
+        case 0x18:{
+            this->sound_timer = this->cpu.registers[second_nibble];
+            break;
+        }
+        case 0x1E:{
+            this->cpu.I += this->cpu.registers[second_nibble];
+            break;
+        }
+        case 0x29:{
+            this->cpu.I = 5*this->cpu.registers[second_nibble];
+            break;
+        }
+        case 0x33:{
+            unsigned char value =  cpu.registers[second_nibble];
+            cpu.memory[cpu.I] = (value/100) % 10;
+            cpu.memory[cpu.I+1] = (value/10) % 10;
+            cpu.memory[cpu.I+2] = (value%10);
+            break;
+        }
+        case 0x55:{
+            for(int i=0;i<second_nibble+1;i++){
+                cpu.memory[this->cpu.I+i] = cpu.registers[i];
+            }
+            break;
+        }
+        case 0x65:{
+            for(int i=0;i<second_nibble+1;i++){
+                cpu.registers[i] = cpu.memory[this->cpu.I+i];
+            }
+            break;
+        }
+    }
+}
+
+void Emulator::subSwitch8(unsigned char second_nibble, unsigned char third_nibble,
+                          unsigned char forth_nibble) {
+    switch (forth_nibble) {
+        case 0:{
+            this->cpu.registers[second_nibble] = this->cpu.registers[third_nibble];
+            break;
+        }
+        case 1:{
+            this->cpu.registers[second_nibble] |= this->cpu.registers[third_nibble];
+            break;
+        }
+        case 2:{
+            this->cpu.registers[second_nibble] &= this->cpu.registers[third_nibble];
+            break;
+        }
+        case 3:{
+            this->cpu.registers[second_nibble] ^= this->cpu.registers[third_nibble];
+            break;
+        }
+        case 4:{
+            unsigned char a = this->cpu.registers[second_nibble];
+            unsigned char b = this->cpu.registers[third_nibble];
+
+            if(a+b<a)
+            {
+                this->cpu.registers[15] = 1;
+            }
+            else{
+                this->cpu.registers[15] = 0;
+            }
+
+            this->cpu.registers[second_nibble] += this->cpu.registers[third_nibble];
+            break;
+        }
+        case 5:{
+            unsigned char a = this->cpu.registers[second_nibble];
+            unsigned char b = this->cpu.registers[third_nibble];
+
+            if(a-b>a)
+            {
+                this->cpu.registers[15] = 1;
+            }
+            else{
+                this->cpu.registers[15] = 0;
+            }
+
+            this->cpu.registers[second_nibble] -= this->cpu.registers[third_nibble];
+            break;
+        }
+        case 6:{
+            this->cpu.registers[15] =  this->cpu.registers[second_nibble] & 1;
+            this->cpu.registers[second_nibble] >>=1;
+            break;
+        }
+        case 7:{
+            unsigned char a = this->cpu.registers[second_nibble];
+            unsigned char b = this->cpu.registers[third_nibble];
+
+            if(a-b>b)
+            {
+                this->cpu.registers[15] = 1;
+            }
+            else{
+                this->cpu.registers[15] = 0;
+            }
+
+            this->cpu.registers[second_nibble] = this->cpu.registers[third_nibble] - this->cpu.registers[second_nibble];
+            break;
+        }
+        case 14:{
+            this->cpu.registers[15] =  this->cpu.registers[second_nibble] >> 7;
+            this->cpu.registers[second_nibble] <<=1;
+            break;
+        }
+        default:{
+            std::cout << "Unknown variation of 8XY instruction format" << std::endl;
+            break;
+        }
+    }
+
+}
+
 void Emulator::execute_instruction() {
 
     unsigned char first_nibble = this->cpu.memory[this->cpu.PC] >> 4;
@@ -181,6 +323,43 @@ void Emulator::execute_instruction() {
     }
 }
 
+void Emulator::initSDL() {
+    int rendererFlags, windowFlags;
+
+    rendererFlags = SDL_RENDERER_ACCELERATED;
+
+    windowFlags = 0;
+
+    if (SDL_Init(SDL_INIT_VIDEO) < 0)
+    {
+        printf("Couldn't initialize SDL: %s\n", SDL_GetError());
+        exit(1);
+    }
+
+    this->sdlApp.window = SDL_CreateWindow("Chip-8 emulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, windowFlags);
+
+    if (!this->sdlApp.window)
+    {
+        printf("Failed to open %d x %d window: %s\n", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_GetError());
+        exit(1);
+    }
+
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+
+    this->sdlApp.renderer = SDL_CreateRenderer(this->sdlApp.window, -1, rendererFlags);
+
+    if (!this->sdlApp.renderer)
+    {
+        printf("Failed to create renderer: %s\n", SDL_GetError());
+        exit(1);
+    }
+
+    if (SDL_Init(SDL_INIT_AUDIO) < 0) {
+        fprintf(stderr, "Could not initialize SDL: %s\n", SDL_GetError());
+        exit(1);
+    }
+}
+
 Emulator::Emulator() {
     memset(this->display,0,sizeof(unsigned  char)*64*32);
     memset(this->cpu.memory,0,sizeof(unsigned  char)*4096);
@@ -216,38 +395,6 @@ Emulator::Emulator() {
     initSDL();
 }
 
-void Emulator::initSDL() {
-    int rendererFlags, windowFlags;
-
-    rendererFlags = SDL_RENDERER_ACCELERATED;
-
-    windowFlags = 0;
-
-    if (SDL_Init(SDL_INIT_VIDEO) < 0)
-    {
-        printf("Couldn't initialize SDL: %s\n", SDL_GetError());
-        exit(1);
-    }
-
-    this->sdlApp.window = SDL_CreateWindow("Chip-8 emulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, windowFlags);
-
-    if (!this->sdlApp.window)
-    {
-        printf("Failed to open %d x %d window: %s\n", WINDOW_WIDTH, WINDOW_HEIGHT, SDL_GetError());
-        exit(1);
-    }
-
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
-
-    this->sdlApp.renderer = SDL_CreateRenderer(this->sdlApp.window, -1, rendererFlags);
-
-    if (!this->sdlApp.renderer)
-    {
-        printf("Failed to create renderer: %s\n", SDL_GetError());
-        exit(1);
-    }
-}
-
 void Emulator::draw() {
 
     SDL_RenderClear(this->sdlApp.renderer);
@@ -270,88 +417,6 @@ void Emulator::draw() {
     SDL_RenderPresent(this->sdlApp.renderer);
 }
 
-void Emulator::subSwitch8(unsigned char second_nibble, unsigned char third_nibble,
-                          unsigned char forth_nibble) {
-    switch (forth_nibble) {
-        case 0:{
-            this->cpu.registers[second_nibble] = this->cpu.registers[third_nibble];
-            break;
-        }
-        case 1:{
-            this->cpu.registers[second_nibble] |= this->cpu.registers[third_nibble];
-            break;
-        }
-        case 2:{
-            this->cpu.registers[second_nibble] &= this->cpu.registers[third_nibble];
-            break;
-        }
-        case 3:{
-            this->cpu.registers[second_nibble] ^= this->cpu.registers[third_nibble];
-            break;
-        }
-        case 4:{
-            unsigned char a = this->cpu.registers[second_nibble];
-            unsigned char b = this->cpu.registers[third_nibble];
-
-            if(a+b<a)
-            {
-                this->cpu.registers[15] = 1;
-            }
-            else{
-                this->cpu.registers[15] = 0;
-            }
-
-            this->cpu.registers[second_nibble] += this->cpu.registers[third_nibble];
-            break;
-        }
-        case 5:{
-            unsigned char a = this->cpu.registers[second_nibble];
-            unsigned char b = this->cpu.registers[third_nibble];
-
-            if(a-b>a)
-            {
-                this->cpu.registers[15] = 1;
-            }
-            else{
-                this->cpu.registers[15] = 0;
-            }
-
-            this->cpu.registers[second_nibble] -= this->cpu.registers[third_nibble];
-            break;
-        }
-        case 6:{
-            this->cpu.registers[15] =  this->cpu.registers[second_nibble] & 1;
-            this->cpu.registers[second_nibble] >>=1;
-            break;
-        }
-        case 7:{
-            unsigned char a = this->cpu.registers[second_nibble];
-            unsigned char b = this->cpu.registers[third_nibble];
-
-            if(a-b>b)
-            {
-                this->cpu.registers[15] = 1;
-            }
-            else{
-                this->cpu.registers[15] = 0;
-            }
-
-            this->cpu.registers[second_nibble] = this->cpu.registers[third_nibble] - this->cpu.registers[second_nibble];
-            break;
-        }
-        case 14:{
-            this->cpu.registers[15] =  this->cpu.registers[second_nibble] >> 7;
-            this->cpu.registers[second_nibble] <<=1;
-            break;
-        }
-        default:{
-            std::cout << "Unknown variation of 8XY instruction format" << std::endl;
-            break;
-        }
-    }
-
-}
-
 void Emulator::run() {
 
     auto cpuUpdate = std::chrono::high_resolution_clock ::now();
@@ -366,7 +431,6 @@ void Emulator::run() {
             }
             else if (event.type == SDL_KEYDOWN) {
                 SDL_Keycode keycode = event.key.keysym.sym;
-                std::cout << "Key pressed: " << SDL_GetKeyName(keycode) << " (Keycode: " << keycode << ")" << std::endl;
                 const char* key = SDL_GetKeyName(keycode);
                 switch (*key) {
                     case '1':
@@ -429,8 +493,6 @@ void Emulator::run() {
         double cycleCPU = (double)1 / this->cpu_frequency;
         double cycleTimer = (double)1 / this->timer_frequency;
 
-        std::cout << cpuDelata << std::endl;
-
         if((cpuDelata.count()/1000)>cycleCPU)
         {
             cpuUpdate = currentTime;
@@ -443,73 +505,17 @@ void Emulator::run() {
             timerUpdate = currentTime;
             this->draw();
             if(this->sound_timer>0){
-                //TODO: play sound
+                Beep(523,950);
                 this->sound_timer--;
             }
+            else{
+                SDL_PauseAudio(1);
+            }
+
             if(this->delay_timer>0){
                 delay_timer--;
             }
 
-        }
-    }
-}
-
-void Emulator::subSwitch15(unsigned char second_nibble, unsigned short second_byte) {
-    switch (second_byte) {
-        case 0x07:{
-            this->cpu.registers[second_nibble] = this->delay_timer;
-            break;
-        }
-        case 0x0A:{
-            unsigned short key_state = this->keyboard & 0xFFFF;
-            if(!key_state) {
-                this->cpu.PC -= 2;
-            }
-            else{
-                for (int i = 0; i < 16; ++i) {
-                    if(this->keyboard & 1 << i){
-                        this->cpu.registers[second_nibble] = i;
-                        break;
-                    }
-                }
-            }
-            this->keyboard = 0;
-            break;
-        }
-        case 0x15:{
-            this->delay_timer = this->cpu.registers[second_nibble];
-            break;
-        }
-        case 0x18:{
-            this->sound_timer = this->cpu.registers[second_nibble];
-            break;
-        }
-        case 0x1E:{
-            this->cpu.I += this->cpu.registers[second_nibble];
-            break;
-        }
-        case 0x29:{
-            this->cpu.I = 5*this->cpu.registers[second_nibble];
-            break;
-        }
-        case 0x33:{
-            unsigned char value =  cpu.registers[second_nibble];
-            cpu.memory[cpu.I] = (value/100) % 10;
-            cpu.memory[cpu.I+1] = (value/10) % 10;
-            cpu.memory[cpu.I+2] = (value%10);
-            break;
-        }
-        case 0x55:{
-            for(int i=0;i<second_nibble+1;i++){
-                cpu.memory[this->cpu.I+i] = cpu.registers[i];
-            }
-            break;
-        }
-        case 0x65:{
-            for(int i=0;i<second_nibble+1;i++){
-                cpu.registers[i] = cpu.memory[this->cpu.I+i];
-            }
-            break;
         }
     }
 }
