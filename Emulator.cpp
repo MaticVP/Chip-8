@@ -4,7 +4,7 @@
 
 #include "Include/Emulator.h"
 
-void Emulator::load_rom(const char path[]) {
+void Emulator::load_rom(const char* path) {
     std::ifstream rom(path, std::ios::binary);
     if(!rom.fail()) {
         std::vector<unsigned char> buffer(std::istreambuf_iterator<char>(rom), {});

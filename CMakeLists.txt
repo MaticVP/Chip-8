@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.26)
 project(Chip_8_emulator)
 
 set(CMAKE_CXX_STANDARD 23)
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libstdc++ -static-libgcc")
 
 set(SDL2_DIR "./Libs/SDL2-2.30.4/cmake")
 find_package(SDL2 REQUIRED)
